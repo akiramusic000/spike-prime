@@ -49,6 +49,7 @@ impl SpikePrime {
         Ok(Box::pin(events))
     }
 
+    /// Scans bluetooth devices, returning the first SPIKE Prime it finds.
     pub async fn scan_first(adapter: &Adapter) -> Result<Self> {
         Ok(Self::scan(adapter).await?.next().await.unwrap())
     }
