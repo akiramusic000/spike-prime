@@ -7,6 +7,7 @@ edition = "2024"
 license = "MIT"
 documentation = "docs.rs/spike-prime"
 repository = "github.com/DDAN-17/spike-prime"
+readme = "README.md"
 keywords = ["spike", "prime", "lego", "robot", "protocol"]
 categories = ["api-bindings", "network-programming"]
 
