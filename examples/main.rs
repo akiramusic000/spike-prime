@@ -1,7 +1,6 @@
 use std::{fs, path::PathBuf};
 
 use clap::Parser;
-use futures::StreamExt;
 use spike_prime::prelude::*;
 
 #[derive(Parser)]
@@ -16,8 +15,7 @@ async fn main() -> Result<()> {
     let manager = Manager::new().await?;
     let adapter = manager.adapters().await?.drain(..).next().unwrap();
     println!("Scanning for SPIKE Prime hubs");
-    let mut stream = SpikePrime::scan(&adapter).await?;
-    let device = stream.next().await.unwrap();
+    let device = SpikePrime::scan_first(&adapter).await?;
     println!("Device found!");
     let mut connection = device.connect().await?;
     println!("Connected!");

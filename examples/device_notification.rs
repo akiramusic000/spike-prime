@@ -1,7 +1,6 @@
 use std::{io::stdout, time::Duration};
 
 use crossterm::execute;
-use futures::StreamExt;
 use spike_prime::prelude::*;
 
 #[tokio::main]
@@ -9,8 +8,7 @@ async fn main() -> Result<()> {
     let manager = Manager::new().await?;
     let adapter = manager.adapters().await?.drain(..).next().unwrap();
     println!("Scanning for SPIKE Prime hubs");
-    let mut stream = SpikePrime::scan(&adapter).await?;
-    let device = stream.next().await.unwrap();
+    let device = SpikePrime::scan_first(&adapter).await?;
     println!("Device found!");
     let mut connection = device.connect().await?;
     connection.enable_device_notifications().await?;

@@ -2,7 +2,7 @@ use std::pin::Pin;
 
 use btleplug::api::{Central as _, CentralEvent, Peripheral as _, ScanFilter};
 use btleplug::platform::{Adapter, Peripheral};
-use futures::Stream;
+use futures::{Stream, StreamExt};
 use uuid::Uuid;
 
 pub mod error;
@@ -14,7 +14,6 @@ pub mod prelude {
     pub use crate::connection::SpikeConnection;
     pub use crate::error::*;
     pub use btleplug::{api::Manager as _, platform::Manager};
-    pub use futures::StreamExt;
 }
 use prelude::*;
 
@@ -48,6 +47,10 @@ impl SpikePrime {
             });
 
         Ok(Box::pin(events))
+    }
+
+    pub async fn scan_first(adapter: &Adapter) -> Result<Self> {
+        Ok(Self::scan(adapter).await?.next().await.unwrap())
     }
 
     /// Connects to a [`SpikePrime`] by returning a [`SpikeConnection`].
