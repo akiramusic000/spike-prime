@@ -24,15 +24,20 @@ async fn main() -> Result<()> {
     let code = fs::read_to_string(args.file)?.replace("\n", "\r\n");
     println!("Uploading file...");
     connection.enable_device_notifications().await?;
-    connection.clear_program_slot(0).await?;
+    println!("Device notifications enabled...");
+    let _ = connection.clear_program_slot(0).await; // Ignore NACK
+    println!("Program slot cleared!");
     connection
         .upload_program(0, "program.py".to_string(), code)
         .await?;
+    println!("Uploaded!");
     connection.start_program(0).await?;
+    println!("Program started");
 
     loop {
-        let response = connection.receive_message().await?;
-        println!("{response:?}");
+        if let Some(r) = connection.try_receive_message() {
+            println!("{:?}", r?);
+        }
         while let Some(c) = connection.try_console_notification() {
             print!("{}", c.console_message);
         }

@@ -283,6 +283,11 @@ impl SpikeConnection {
         self.msg_rx.recv().await.unwrap()
     }
 
+    /// A non-async version of [`SpikeConnection::receive_message`]. Will return None if no messages are availible.
+    pub fn try_receive_message(&mut self) -> Option<Result<TxMessage>> {
+        self.msg_rx.try_recv().ok()
+    }
+
     /// Repeatedly sends a [`TransferChunkRequest`] message in order to transfer data. Some messages are required to follow them with this message, so this function can help with those.
     pub async fn send_chunks(&mut self, data: Vec<u8>) -> Result<()> {
         let crc = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
@@ -370,7 +375,6 @@ impl SpikeConnection {
     pub async fn clear_program_slot(&mut self, slot: u8) -> Result<()> {
         self.send_message(ClearSlotRequest { program_slot: slot })
             .await?;
-        self.receive_message().await?;
 
         let status = if let TxMessage::ClearSlotResponse(r) = self.receive_message().await? {
             r.response_status
