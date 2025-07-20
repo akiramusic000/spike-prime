@@ -1,9 +1,8 @@
 use std::{fs, path::PathBuf};
 
-use btleplug::{api::Manager as _, platform::Manager};
 use clap::Parser;
 use futures::StreamExt;
-use spike_prime::{Result, SpikePrime, connection::message::*};
+use spike_prime::prelude::*;
 
 #[derive(Parser)]
 struct Args {
@@ -27,16 +26,15 @@ async fn main() -> Result<()> {
     connection.enable_device_notifications().await?;
     connection.clear_program_slot(0).await?;
     connection
-        .upload_file(0, "program.py".to_string(), code)
+        .upload_program(0, "program.py".to_string(), code)
         .await?;
     connection.start_program(0).await?;
 
     loop {
         let response = connection.receive_message().await?;
-        if let TxMessage::ConsoleNotification(r) = response {
-            print!("{}", r.console_message);
-        } else {
-            println!("{response:?}");
+        println!("{response:?}");
+        while let Some(c) = connection.try_console_notification() {
+            print!("{}", c.console_message);
         }
     }
 }

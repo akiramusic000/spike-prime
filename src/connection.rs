@@ -1,18 +1,15 @@
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-};
+use std::{pin::Pin, sync::Arc};
 
 use crate::{connection::message::*, error::*};
 use btleplug::{
-    api::{Characteristic, Peripheral as _, WriteType},
+    api::{Characteristic, Peripheral as _, ValueNotification, WriteType},
     platform::Peripheral,
 };
-use futures::StreamExt;
+use futures::{Stream, StreamExt};
 use tokio::{
     sync::{
         Mutex,
-        mpsc::{self, Receiver},
+        mpsc::{self, Receiver, Sender},
     },
     task::JoinHandle,
 };
@@ -22,6 +19,7 @@ const DEVICE_NOTIFICATION_INTERVAL: u16 = 10;
 
 pub mod message;
 
+/// Struct that represents the connection between a SPIKE Prime and the devices connected to it.
 pub struct SpikeConnection {
     connection: Peripheral,
     /// RX (from the hub's perspective)
@@ -33,8 +31,9 @@ pub struct SpikeConnection {
     max_chunk_size: u16,
     device_notification: Arc<Mutex<Option<DeviceNotification>>>,
     msg_rx: Receiver<Result<TxMessage>>,
+    console_rx: Receiver<ConsoleNotification>,
+    program_flow_rx: Receiver<ProgramFlowNotification>,
     _msg_handle: JoinHandle<()>,
-    filter_device_notifications: Arc<AtomicBool>,
 }
 
 impl std::fmt::Debug for SpikeConnection {
@@ -105,36 +104,18 @@ impl SpikeConnection {
             return Err(Error::BadDevice);
         }
 
-        let (msg_tx, msg_rx) = mpsc::channel(32 * 4); // Buffer holds 4 messages
+        let (msg_tx, msg_rx) = mpsc::channel(4);
+        let (console_tx, console_rx) = mpsc::channel(4);
+        let (program_flow_tx, program_flow_rx) = mpsc::channel(4);
         let device_notification = Arc::new(Mutex::new(None));
 
-        let filter_device_notifications = Arc::new(AtomicBool::new(false));
-        let fdn2 = filter_device_notifications.clone();
-        let device_notification2 = device_notification.clone();
-
-        let handle = tokio::spawn(async move {
-            let device_notification = device_notification2;
-            let filter_device_notifications = fdn2;
-            let mut notifications = notifications;
-            let mut buffer = Vec::new();
-
-            loop {
-                let device_notifications = filter_device_notifications.load(Ordering::Relaxed);
-                let mut x = notifications.next().await.unwrap();
-                buffer.append(&mut x.value);
-                if buffer.ends_with(&[0x02]) {
-                    let decode_buffer = Self::decode_message(buffer);
-                    let message = TxMessage::deserialize(decode_buffer);
-                    buffer = Vec::new();
-
-                    if device_notifications && let Ok(TxMessage::DeviceNotification(r)) = message {
-                        *device_notification.lock().await = Some(r);
-                    } else {
-                        msg_tx.send(message).await.expect("BUG");
-                    }
-                }
-            }
-        });
+        let handle = tokio::spawn(filter_thread(
+            msg_tx,
+            device_notification.clone(),
+            notifications,
+            console_tx,
+            program_flow_tx,
+        ));
 
         Ok(SpikeConnection {
             connection,
@@ -145,8 +126,9 @@ impl SpikeConnection {
             max_message_size: packet.max_msg_size,
             max_chunk_size: packet.max_chunk_size,
             msg_rx,
+            console_rx,
+            program_flow_rx,
             _msg_handle: handle,
-            filter_device_notifications,
             device_notification,
         })
     }
@@ -173,14 +155,40 @@ impl SpikeConnection {
         self.max_chunk_size
     }
 
+    /// Returns the last device notification sent to the computer. [`SpikeConnection::enable_device_notifications`] must have been called for this to return Some.
+    /// Returns None if no device notification has been sent, or if device notifications are disabled.
     pub async fn device_notification(&self) -> Option<DeviceNotification> {
         self.device_notification.lock().await.clone()
     }
 
+    /// A non-async version of [`SpikeConnection::device_notification`]. Will return None if a [`DeviceNotification`] is currently being set.
+    pub fn try_device_notification(&self) -> Option<DeviceNotification> {
+        self.device_notification.try_lock().ok()?.clone()
+    }
+
+    /// Returns and consumes the last [`ConsoleNotification`] sent. If all ConsoleNotifications have been consumed, this function will wait until another is availible.
+    pub async fn console_notification(&mut self) -> ConsoleNotification {
+        self.console_rx.recv().await.expect("BUG")
+    }
+
+    /// A non-async version of [`SpikeConnection::console_notification`]. Will return None if no [`ConsoleNotification`]s are availible.
+    pub fn try_console_notification(&mut self) -> Option<ConsoleNotification> {
+        self.console_rx.try_recv().ok()
+    }
+
+    /// Returns and consumes the last [`ProgramFlowNotification`] sent. If all ProgramFlowNotifications have been consumed, this function will wait until another is availible.
+    pub async fn program_flow_notification(&mut self) -> ProgramFlowNotification {
+        self.program_flow_rx.recv().await.expect("BUG")
+    }
+
+    /// A non-async version of [`SpikeConnection::program_flow_notification`]. Will return None if no [`ProgramFlowNotification`]s are availible.
+    pub fn try_program_flow_notification(&mut self) -> Option<ProgramFlowNotification> {
+        self.program_flow_rx.try_recv().ok()
+    }
+
+    /// Sends a message to the SPIKE Prime.
     pub async fn send_message<'a, R: Into<RxMessage<'a>>>(&self, message: R) -> Result<()> {
         let message = message.into().serialize();
-        println!("{message:?}");
-        println!("{}", String::from_utf8_lossy(&message));
         if message.len() > self.max_message_size as usize {
             return Err(Error::OversizedMessage);
         }
@@ -201,7 +209,7 @@ impl SpikeConnection {
         }
     }
 
-    pub async fn get_device_uuid(&mut self) -> Result<Uuid> {
+    pub async fn get_hub_uuid(&mut self) -> Result<Uuid> {
         self.send_message(RxMessage::DeviceUuidRequest).await?;
         let uuid = if let TxMessage::DeviceUuidResponse(r) = self.receive_message().await? {
             r.uuid
@@ -225,6 +233,8 @@ impl SpikeConnection {
         Ok(())
     }
 
+    /// Enables device notifications to be sent to the client. Call [`SpikeConnection::device_notification`] to receive the notification.
+    /// A new notification will be sent every 10 ms.
     pub async fn enable_device_notifications(&mut self) -> Result<()> {
         self.send_message(DeviceNotificationRequest {
             interval: DEVICE_NOTIFICATION_INTERVAL,
@@ -240,18 +250,22 @@ impl SpikeConnection {
             return Err(Error::NotAcknowledged("DeviceNotificationRequest", None));
         }
 
-        self.filter_device_notifications
-            .store(true, Ordering::Relaxed);
-
         Ok(())
     }
 
+    /// Disables device notifications.
     pub async fn disable_device_notifications(&mut self) -> Result<()> {
         self.send_message(DeviceNotificationRequest { interval: 0 })
             .await?;
-
-        self.filter_device_notifications
-            .store(false, Ordering::Relaxed);
+        let status =
+            if let TxMessage::DeviceNotificationResponse(r) = self.receive_message().await? {
+                r.response_status
+            } else {
+                return Err(Error::WrongMessage);
+            };
+        if status == ResponseStatus::NotAcknowledged {
+            return Err(Error::NotAcknowledged("DeviceNotificationRequest", None));
+        }
         *self.device_notification.lock().await = None;
 
         Ok(())
@@ -264,10 +278,12 @@ impl SpikeConnection {
         Ok(())
     }
 
+    /// Receives a message from the device. This function will never return [`DeviceNotification`], [`ConsoleNotification`], or [`ProgramFlowNotification`]. To receive those, see [`SpikeConnection::device_notification`], [`SpikeConnection::console_notification`], or [`SpikeConnection::program_flow_notification`] respectively.
     pub async fn receive_message(&mut self) -> Result<TxMessage> {
         self.msg_rx.recv().await.unwrap()
     }
 
+    /// Repeatedly sends a [`TransferChunkRequest`] message in order to transfer data. Some messages are required to follow them with this message, so this function can help with those.
     pub async fn send_chunks(&mut self, data: Vec<u8>) -> Result<()> {
         let crc = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
         let mut digest = crc.digest();
@@ -300,6 +316,7 @@ impl SpikeConnection {
         Ok(())
     }
 
+    /// Starts a program on the hub by sending a [`ProgramFlowRequest`] with [`ProgramAction::Start`].
     pub async fn start_program(&mut self, slot: u8) -> Result<()> {
         self.send_message(ProgramFlowRequest {
             program_action: ProgramAction::Start,
@@ -318,7 +335,8 @@ impl SpikeConnection {
         Ok(())
     }
 
-    pub async fn upload_file(&mut self, slot: u8, name: String, code: String) -> Result<()> {
+    /// Uploads a python program to the hub.
+    pub async fn upload_program(&mut self, slot: u8, name: String, code: String) -> Result<()> {
         let crc = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
         let mut crc32 = crc.digest();
 
@@ -328,8 +346,6 @@ impl SpikeConnection {
             crc32.update(&[0]);
         }
         let crc32 = crc32.finalize();
-        println!("crc32: {crc32}");
-        //let crc32 = 0;
         let message = StartFileUploadRequest {
             file_name: &name,
             program_slot: slot,
@@ -350,6 +366,7 @@ impl SpikeConnection {
         Ok(())
     }
 
+    /// Clears a program from a program slot.
     pub async fn clear_program_slot(&mut self, slot: u8) -> Result<()> {
         self.send_message(ClearSlotRequest { program_slot: slot })
             .await?;
@@ -452,5 +469,35 @@ impl SpikeConnection {
         }
 
         (Some(value), block)
+    }
+}
+
+async fn filter_thread(
+    msg_tx: Sender<Result<TxMessage>>,
+    device_notification: Arc<Mutex<Option<DeviceNotification>>>,
+    mut notifications: Pin<Box<dyn Stream<Item = ValueNotification> + Send>>,
+    console_tx: Sender<ConsoleNotification>,
+    program_flow_tx: Sender<ProgramFlowNotification>,
+) {
+    let mut buffer = Vec::new();
+
+    loop {
+        let mut x = notifications.next().await.unwrap();
+        buffer.append(&mut x.value);
+        if buffer.ends_with(&[0x02]) {
+            let decode_buffer = SpikeConnection::decode_message(buffer);
+            let message = TxMessage::deserialize(decode_buffer);
+            buffer = Vec::new();
+
+            if let Ok(TxMessage::DeviceNotification(r)) = message {
+                *device_notification.lock().await = Some(r);
+            } else if let Ok(TxMessage::ConsoleNotification(r)) = message {
+                console_tx.send(r).await.expect("BUG");
+            } else if let Ok(TxMessage::ProgramFlowNotification(r)) = message {
+                program_flow_tx.send(r).await.expect("BUG");
+            } else {
+                msg_tx.send(message).await.expect("BUG");
+            }
+        }
     }
 }

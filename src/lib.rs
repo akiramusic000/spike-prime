@@ -1,16 +1,24 @@
 use std::pin::Pin;
 
-use btleplug::api::{Central as _, CentralEvent, ScanFilter};
+use btleplug::api::{Central as _, CentralEvent, Peripheral as _, ScanFilter};
 use btleplug::platform::{Adapter, Peripheral};
-use futures::{Stream, StreamExt};
+use futures::Stream;
 use uuid::Uuid;
 
 pub mod error;
-pub use error::*;
 
 pub mod connection;
-use crate::connection::SpikeConnection;
 
+pub mod prelude {
+    pub use crate::SpikePrime;
+    pub use crate::connection::SpikeConnection;
+    pub use crate::error::*;
+    pub use btleplug::{api::Manager as _, platform::Manager};
+    pub use futures::StreamExt;
+}
+use prelude::*;
+
+/// Represents a SPIKE Prime device, before it has been connected to.
 #[derive(Debug)]
 pub struct SpikePrime(Peripheral);
 
@@ -19,6 +27,7 @@ const PRIME_SERVICE: Uuid = Uuid::from_bytes([
 ]);
 
 impl SpikePrime {
+    /// Scans bluetooth devices, looking for a SPIKE Prime, using an [`Adapter`].
     pub async fn scan<'a>(
         adapter: &'a Adapter,
     ) -> Result<Pin<Box<dyn Stream<Item = SpikePrime> + Send + 'a>>> {
@@ -41,7 +50,13 @@ impl SpikePrime {
         Ok(Box::pin(events))
     }
 
+    /// Connects to a [`SpikePrime`] by returning a [`SpikeConnection`].
     pub async fn connect(self) -> Result<SpikeConnection> {
         SpikeConnection::new(self.0).await
+    }
+
+    /// Finds the name of a [`SpikePrime`] without connecting to it.
+    pub async fn name(&self) -> Option<String> {
+        self.0.properties().await.ok()??.local_name
     }
 }

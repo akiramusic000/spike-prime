@@ -1,9 +1,8 @@
 use std::{io::stdout, time::Duration};
 
-use btleplug::{api::Manager as _, platform::Manager};
 use crossterm::execute;
 use futures::StreamExt;
-use spike_prime::{Result, SpikePrime};
+use spike_prime::prelude::*;
 
 #[tokio::main]
 async fn main() -> Result<()> {

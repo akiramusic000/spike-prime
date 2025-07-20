@@ -1,3 +1,5 @@
+//! Module for messages that can be sent to the SPIKE Prime, and received from the SPIKE Prime.
+
 use std::io::{Cursor, Read};
 
 use byteorder::{LittleEndian, ReadBytesExt};
@@ -6,6 +8,7 @@ use uuid::Uuid;
 
 use crate::error::*;
 
+/// Messages sent to the SPIKE Prime
 #[derive(Debug, PartialEq, Eq, Hash, Clone, FromVariants)]
 pub enum RxMessage<'a> {
     InfoRequest,
@@ -176,6 +179,7 @@ impl DeviceNotificationRequest {
     }
 }
 
+/// Messages received from the SPIKE Prime
 #[derive(Debug, PartialEq, Eq, Hash, Clone, FromVariants)]
 pub enum TxMessage {
     InfoResponse(InfoResponse),
@@ -299,7 +303,7 @@ impl StartFirmwareUploadResponse {
             i => {
                 return Err(Error::InvalidEnumValue {
                     enum_name: "ResponseStatus",
-                    value: i as u32,
+                    value: i,
                 });
             }
         };
@@ -324,7 +328,7 @@ impl StartFileUploadResponse {
             i => {
                 return Err(Error::InvalidEnumValue {
                     enum_name: "ResponseStatus",
-                    value: i as u32,
+                    value: i,
                 });
             }
         };
@@ -345,7 +349,7 @@ impl TransferChunkResponse {
             i => {
                 return Err(Error::InvalidEnumValue {
                     enum_name: "ResponseStatus",
-                    value: i as u32,
+                    value: i,
                 });
             }
         };
@@ -366,7 +370,7 @@ impl BeginFirmwareUpdateResponse {
             i => {
                 return Err(Error::InvalidEnumValue {
                     enum_name: "ResponseStatus",
-                    value: i as u32,
+                    value: i,
                 });
             }
         };
@@ -387,7 +391,7 @@ impl SetHubNameResponse {
             i => {
                 return Err(Error::InvalidEnumValue {
                     enum_name: "ResponseStatus",
-                    value: i as u32,
+                    value: i,
                 });
             }
         };
@@ -434,7 +438,7 @@ impl ProgramFlowResponse {
             i => {
                 return Err(Error::InvalidEnumValue {
                     enum_name: "ResponseStatus",
-                    value: i as u32,
+                    value: i,
                 });
             }
         };
@@ -455,7 +459,7 @@ impl ProgramFlowNotification {
             i => {
                 return Err(Error::InvalidEnumValue {
                     enum_name: "ProgramAction",
-                    value: i as u32,
+                    value: i,
                 });
             }
         };
@@ -476,7 +480,7 @@ impl ClearSlotResponse {
             i => {
                 return Err(Error::InvalidEnumValue {
                     enum_name: "ResponseStatus",
-                    value: i as u32,
+                    value: i,
                 });
             }
         };
@@ -509,7 +513,7 @@ impl DeviceNotificationResponse {
             i => {
                 return Err(Error::InvalidEnumValue {
                     enum_name: "ResponseStatus",
-                    value: i as u32,
+                    value: i,
                 });
             }
         };
@@ -536,7 +540,7 @@ impl DeviceNotification {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum DeviceMessage {
-    /// In percentage
+    /// The devices's battery in percentage
     DeviceBattery(u8),
     DeviceImuValues {
         up_face: HubFace,
@@ -551,6 +555,7 @@ pub enum DeviceMessage {
         gyroscope_y: i16,
         gyroscope_z: i16,
     },
+    /// The brightness of the pixels on the device's matrix display
     Device5x5MatrixDisplay([u8; 25]),
     DeviceMotor {
         port: HubPort,
@@ -621,7 +626,7 @@ impl DeviceMessage {
                     i => {
                         return Err(Error::InvalidEnumValue {
                             enum_name: "bool",
-                            value: i as u32,
+                            value: i,
                         });
                     }
                 },
@@ -698,7 +703,7 @@ impl TryFrom<u8> for HubFace {
             0x05 => Ok(HubFace::Left),
             _ => Err(Error::InvalidEnumValue {
                 enum_name: "HubFace",
-                value: value as u32,
+                value,
             }),
         }
     }
@@ -727,7 +732,7 @@ impl TryFrom<u8> for HubPort {
             0x05 => Ok(HubPort::F),
             _ => Err(Error::InvalidEnumValue {
                 enum_name: "HubPort",
-                value: value as u32,
+                value,
             }),
         }
     }
@@ -758,7 +763,7 @@ impl TryFrom<u8> for MotorDeviceType {
             0x41 => Ok(MotorDeviceType::Small),
             _ => Err(Error::InvalidEnumValue {
                 enum_name: "MotorDeviceType",
-                value: value as u32,
+                value,
             }),
         }
     }

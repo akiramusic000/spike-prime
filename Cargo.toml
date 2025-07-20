@@ -1,7 +1,7 @@
 [package]
 name = "spike_prime"
 authors = ["DDAN"]
-version = "0.1.0"
+version = "1.0.0"
 description = "Wrapper around the SPIKE Prime communication protocol."
 edition = "2024"
 license = "MIT"
