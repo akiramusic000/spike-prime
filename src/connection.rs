@@ -212,9 +212,7 @@ impl SpikeConnection {
     }
 
     pub async fn set_hub_name(&mut self, name: &str) -> Result<()> {
-        self.send_message(SetHubNameRequest {
-            name
-        }).await?;
+        self.send_message(SetHubNameRequest { name }).await?;
 
         let status = if let TxMessage::SetHubNameResponse(r) = self.receive_message().await? {
             r.response_status
@@ -232,11 +230,12 @@ impl SpikeConnection {
             interval: DEVICE_NOTIFICATION_INTERVAL,
         })
         .await?;
-        let status = if let TxMessage::DeviceNotificationResponse(r) = self.receive_message().await? {
-            r.response_status
-        } else {
-            return Err(Error::WrongMessage);
-        };
+        let status =
+            if let TxMessage::DeviceNotificationResponse(r) = self.receive_message().await? {
+                r.response_status
+            } else {
+                return Err(Error::WrongMessage);
+            };
         if status == ResponseStatus::NotAcknowledged {
             return Err(Error::NotAcknowledged("DeviceNotificationRequest", None));
         }
@@ -352,9 +351,8 @@ impl SpikeConnection {
     }
 
     pub async fn clear_program_slot(&mut self, slot: u8) -> Result<()> {
-        self.send_message(ClearSlotRequest {
-            program_slot: slot,
-        }).await?;
+        self.send_message(ClearSlotRequest { program_slot: slot })
+            .await?;
         self.receive_message().await?;
 
         let status = if let TxMessage::ClearSlotResponse(r) = self.receive_message().await? {

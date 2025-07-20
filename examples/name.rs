@@ -1,4 +1,4 @@
-use std::io::{stdin, stdout, Write};
+use std::io::{Write, stdin, stdout};
 
 use btleplug::{api::Manager as _, platform::Manager};
 use futures::StreamExt;
