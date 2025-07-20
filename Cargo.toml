@@ -7,6 +7,8 @@ edition = "2024"
 license = "MIT"
 documentation = "docs.rs/spike-prime"
 repository = "github.com/DDAN-17/spike-prime"
+keywords = ["spike", "prime", "lego", "robot", "protocol"]
+categories = ["api-bindings", "network-programming"]
 
 [dependencies]
 btleplug = "0.11.8" # Bluetooth communications
