@@ -1,20 +1,21 @@
 [package]
 name = "spike_prime"
-authors = ["DDAN17"]
+authors = ["DDAN"]
 version = "0.1.0"
 description = "Wrapper around the SPIKE Prime communication protocol."
 edition = "2024"
+license = "MIT"
 
 [dependencies]
-btleplug = "0.11.8"
-uuid = "1.17.0"
-futures = "0.3.31"
-byteorder = "1.5"
-crc = "3.3.0"
-from_variants = "1.0.2"
-tokio = { version = "1.46.1", features = ["full"] }
+btleplug = "0.11.8" # Bluetooth communications
+uuid = "1.17.0" # UUID stuff
+futures = "0.3.31" # Stream trait
+byteorder = "1.5" # Reading easily from io::Cursor
+crc = "3.3.0" # CRC-32 checksums
+from_variants = "1.0.2" # Something I could implement myself, but that would be stupid
+tokio = "1.46.1" # MSPC communications/threading
 
 [dev-dependencies]
 clap = { version = "4.5.41", features = ["derive"] }
 crossterm = "0.29.0"
-tokio = { version = "1.46.1", features = ["full"] }
+tokio = { version = "1.46.1", features = ["rt", "macros", "rt-multi-thread"] }
