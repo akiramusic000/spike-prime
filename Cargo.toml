@@ -1,0 +1,20 @@
+[package]
+name = "spike_prime"
+authors = ["DDAN17"]
+version = "0.1.0"
+description = "Wrapper around the SPIKE Prime communication protocol."
+edition = "2024"
+
+[dependencies]
+btleplug = "0.11.8"
+uuid = "1.17.0"
+futures = "0.3.31"
+byteorder = "1.5"
+crc = "3.3.0"
+from_variants = "1.0.2"
+tokio = { version = "1.46.1", features = ["full"] }
+
+[dev-dependencies]
+clap = { version = "4.5.41", features = ["derive"] }
+crossterm = "0.29.0"
+tokio = { version = "1.46.1", features = ["full"] }
