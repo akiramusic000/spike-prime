@@ -188,7 +188,11 @@ impl SpikeConnection {
 
     /// Sends a message to the SPIKE Prime.
     pub async fn send_message<'a, R: Into<RxMessage<'a>>>(&self, message: R) -> Result<()> {
-        let message = message.into().serialize();
+        let into = message.into();
+        #[cfg(feature = "debug_logging")]
+        println!("Sending message: {into:?}");
+
+        let message = into.serialize();
         if message.len() > self.max_message_size as usize {
             return Err(Error::OversizedMessage);
         }
@@ -280,7 +284,10 @@ impl SpikeConnection {
 
     /// Receives a message from the device. This function will never return [`DeviceNotification`], [`ConsoleNotification`], or [`ProgramFlowNotification`]. To receive those, see [`SpikeConnection::device_notification`], [`SpikeConnection::console_notification`], or [`SpikeConnection::program_flow_notification`] respectively.
     pub async fn receive_message(&mut self) -> Result<TxMessage> {
-        self.msg_rx.recv().await.unwrap()
+        let msg = self.msg_rx.recv().await.unwrap()?;
+        #[cfg(feature = "debug_logging")]
+        println!("Received message: {msg:?}");
+        Ok(msg)
     }
 
     /// A non-async version of [`SpikeConnection::receive_message`]. Will return None if no messages are availible.
@@ -340,7 +347,7 @@ impl SpikeConnection {
         Ok(())
     }
 
-    /// Uploads a python program to the hub.
+    /// Uploads a python program to the hub. Keep in mind that one slot can hold more than 1 program, but in order for a slot to be able to be ran, there has to be a program called "program.py."
     pub async fn upload_program(&mut self, slot: u8, name: String, code: String) -> Result<()> {
         let crc = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
         let mut crc32 = crc.digest();

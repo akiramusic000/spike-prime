@@ -21,7 +21,7 @@ async fn main() -> Result<()> {
     println!("Connected!");
     let code = fs::read_to_string(args.file)?.replace("\n", "\r\n");
     println!("Uploading file...");
-    connection.enable_device_notifications().await?;
+    //connection.enable_device_notifications().await?;
     println!("Device notifications enabled...");
     let _ = connection.clear_program_slot(0).await; // Ignore NACK
     println!("Program slot cleared!");
